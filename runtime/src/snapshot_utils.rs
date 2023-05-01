@@ -4687,5 +4687,80 @@ mod tests {
         fs::remove_file(status_cache_file).unwrap();
         let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
         assert_eq!(snapshot.slot, 1);
+
+        // let snapshot_archives = get_full_snapshot_archives(full_snapshot_archives_dir);
     }
+
+
+    #[test]
+    fn halborn_fake_dir() {
+        solana_logger::setup();
+
+        let genesis_config = GenesisConfig::default();
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let bank_snapshots_dir = tmp_dir.path();
+        let collecter_id = Pubkey::new_unique();
+        let snapshot_version = SnapshotVersion::default();
+
+        for _ in 0..4 {
+            // prepare the bank
+            bank = Arc::new(Bank::new_from_parent(&bank, &collecter_id, bank.slot() + 1));
+            bank.fill_bank_with_ticks_for_tests();
+            bank.squash();
+            bank.force_flush_accounts_cache();
+
+            // generate the bank snapshot directory for slot+1
+            let snapshot_storages = bank.get_snapshot_storages(None);
+            let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+            add_bank_snapshot(
+                bank_snapshots_dir,
+                &bank,
+                &snapshot_storages,
+                snapshot_version,
+                slot_deltas,
+            )
+            .unwrap();
+        }
+
+        let current_dir = bank_snapshots_dir.to_str().unwrap().to_owned()+"/4";
+        let new_dir = bank_snapshots_dir.to_str().unwrap().to_owned() +"/8";
+
+        fs::rename(current_dir.clone(), new_dir.clone());
+
+        let snapshot = get_highest_bank_snapshot(bank_snapshots_dir).unwrap();
+        assert_eq!(snapshot.slot, 3);
+
+        let snapshot_version_file = snapshot.snapshot_dir.join(SNAPSHOT_VERSION_FILENAME);
+        fs::remove_file(snapshot_version_file).unwrap();
+        
+        let current_dir = bank_snapshots_dir.to_str().unwrap().to_owned()+"/2";
+        let new_dir = new_dir.clone() +"/2";
+
+        fs::rename(current_dir.clone(), new_dir.clone());
+
+        let snapshot = get_highest_bank_snapshot(new_dir.clone());
+        assert_eq!(snapshot, None);
+
+        common_create_bank_snapshot_files(bank_snapshots_dir, 5, 7);
+
+        let bank_snapshots = get_bank_snapshots(bank_snapshots_dir);
+        println!("{:?} len:{:?}",bank_snapshots, bank_snapshots.len());
+        assert_eq!(bank_snapshots.len() as Slot, 3);
+
+        let new_dir = new_dir.clone() +"/11";
+
+        File::create(new_dir.clone() +"/" + SNAPSHOT_STATUS_CACHE_FILENAME);
+        File::create(new_dir.clone() +"/" + SNAPSHOT_VERSION_FILENAME);
+        File::create(new_dir.clone() +"/" + SNAPSHOT_STATE_COMPLETE_FILENAME);
+        File::create(new_dir.clone() +"/" + BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+        
+        let res = BankSnapshotInfo::new_from_dir(&bank_snapshots_dir.clone(), 11);
+        println!("{:?}",res);
+        //assert_eq!(res, Err(SnapshotNewFromDirError::InvalidBankSnapshotDir))
+
+
+    }
+
 }
