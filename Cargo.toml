@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "fuzz",
     "account-decoder",
     "accounts-bench",
     "accounts-cluster-bench",
@@ -257,7 +258,7 @@ prost-types = "0.11.9"
 protobuf-src = "1.1.0"
 qstring = "0.7.2"
 quinn = "0.9.3"
-quinn-proto = "0.9.3"
+quinn-proto = {version="0.9.3", features=["arbitrary"]}
 quinn-udp = "0.3.2"
 quote = "1.0"
 rand = "0.7.0"
